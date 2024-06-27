@@ -1,6 +1,9 @@
-# 🚕: Magic router
+# 🚕: Magic Trip Solver
 
 A Streamlit app performing trip calculation given a long set of points.
+
+
+## You can explore a demo of Magic Trip Solver [online](https://magic-trip-solver.streamlit.app/)
 
 
 ### How to run it on your own machine
