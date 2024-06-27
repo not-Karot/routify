@@ -1,2 +1,5 @@
 streamlit
 pandas
+folium
+geopandas
+streamlit_folium
