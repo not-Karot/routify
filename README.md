@@ -1,4 +1,4 @@
-# :routing: Magic router
+# 🚕: Magic router
 
 A Streamlit app performing trip calculation given a long set of points.
 
