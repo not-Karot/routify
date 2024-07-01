@@ -14,7 +14,7 @@ def get_osrm_trip(
         overview: str = 'full',
         annotations: str = 'true',
         roundtrip: str = 'false',
-        base_url: str = 'http://localhost:5000'
+        base_url: str = 'http://router.project-osrm.org'
 ) -> Optional[Union[List[LineString], requests.Response]]:
     """
     Fetch and process an OSRM trip based on the given parameters.
