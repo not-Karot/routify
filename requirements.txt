@@ -3,3 +3,5 @@ pandas
 folium
 geopandas
 streamlit_folium
+polyline
+osmnx
