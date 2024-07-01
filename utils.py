@@ -1,6 +1,7 @@
 from typing import Optional
 
 import folium
+import requests
 import streamlit as st
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
@@ -11,6 +12,26 @@ import polyline
 from osm_utils import get_gdfs_from_polygon, filter_data, merge_points_gdf_with_streets_edges, \
     convert_gdf_to_single_point_list
 from routing import get_osrm_trip
+
+from enum import Enum
+
+
+class TransportProfile(Enum):
+    CAR = ("Car", "driving", "drive", 40)  # Nome, OSRM profile, OSM network type, average speed (km/h)
+    BIKE = ("Bike", "cycling", "bike", 15)
+
+    def __init__(self, display_name, osrm_profile, osm_network, avg_speed):
+        self.display_name = display_name
+        self.osrm_profile = osrm_profile
+        self.osm_network = osm_network
+        self.avg_speed = avg_speed
+
+    @classmethod
+    def get_by_display_name(cls, name):
+        for profile in cls:
+            if profile.display_name == name:
+                return profile
+        raise ValueError(f"No TransportProfile found for name: {name}")
 
 
 def compute_polygon_buffer(gdf: gpd.GeoDataFrame, buffer_distance: float = 0.01) -> Polygon:
@@ -48,7 +69,7 @@ def compute_polygon_buffer(gdf: gpd.GeoDataFrame, buffer_distance: float = 0.01)
     return buffered_convex_hull
 
 
-def calculate_trip(gdf: gpd.GeoDataFrame, network_type: str = "drive") -> Optional[gpd.GeoDataFrame]:
+def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile) -> Optional[gpd.GeoDataFrame]:
     """
     Calculate a trip based on the input GeoDataFrame and network type.
 
@@ -58,7 +79,7 @@ def calculate_trip(gdf: gpd.GeoDataFrame, network_type: str = "drive") -> Option
 
     Args:
         gdf (gpd.GeoDataFrame): The input GeoDataFrame containing points to calculate the trip for.
-        network_type (str, optional): The type of network to use for the trip calculation. Defaults to "drive".
+        profile (TransportProfile, optional): The type of profile to use for the trip calculation. Defaults to "drive".
 
     Returns:
         Optional[gpd.GeoDataFrame]: A GeoDataFrame containing the calculated route segments if successful,
@@ -79,7 +100,7 @@ def calculate_trip(gdf: gpd.GeoDataFrame, network_type: str = "drive") -> Option
     polygon = compute_polygon_buffer(gdf)
 
     # Get network nodes and edges within the polygon
-    gdf_nodes, gdf_edges = get_gdfs_from_polygon(polygon, network_type)
+    _, gdf_edges = get_gdfs_from_polygon(polygon, profile.osm_network)
 
     # Filter the edges data
     gdf_edges = gdf_edges.pipe(filter_data)
@@ -94,13 +115,19 @@ def calculate_trip(gdf: gpd.GeoDataFrame, network_type: str = "drive") -> Option
     encoded_polyline = polyline.encode(point_list)
 
     # Get the trip routes using the OSRM API
-    routes = get_osrm_trip(encoded_polyline)
+    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile)
+
+    if isinstance(routes, requests.Response):
+        st.error(f"OSRM API error: {routes.status_code} - {routes.text}")
+        return None
 
     # Assert that routes are found
-    assert routes is not None, "No valid routes found"
+    if not routes:
+        st.warning("No valid routes found")
+        return None
 
     # Create a GeoDataFrame from the routes
-    routes_gdf = gpd.GeoDataFrame(geometry=routes)
+    routes_gdf = gpd.GeoDataFrame(geometry=routes, crs="EPSG:4326")
     routes_gdf.reset_index(inplace=True)
 
     return routes_gdf
@@ -139,3 +166,12 @@ def display_map(gdf):
     # Display GeoDataFrame as a table
     st.subheader("Data Table")
     st.dataframe(gdf.drop(columns=['geometry'], errors="ignore"))
+
+
+def interpolate_color(value, start_color, end_color):
+    """Interpolate color from start_color to end_color based on value in [0, 1]."""
+    start_color = [int(start_color[i:i+2], 16) for i in (1, 3, 5)]
+    end_color = [int(end_color[i:i+2], 16) for i in (1, 3, 5)]
+    color = [int(start + (end - start) * value) for start, end in zip(start_color, end_color)]
+    return f'#{color[0]:02x}{color[1]:02x}{color[2]:02x}'
+

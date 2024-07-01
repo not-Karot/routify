@@ -50,7 +50,6 @@ def get_osrm_trip(
     )
 
     response = requests.get(osrm_url)
-    print(response)
     if response.status_code == 200:
         data = response.json()
         trips = data.get('trips', [])
