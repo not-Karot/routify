@@ -47,7 +47,7 @@ if points_file is not None:
         if st.button("Start Trip Calculation"):
             with st.spinner("Calculating optimal trip..."):
                 profile = TransportProfile.get_by_display_name(transport_mode)
-                trip_gdf = calculate_trip(filtered_points, profile=profile)
+                trip_gdf = calculate_trip(filtered_points, profile=profile, roundtrip=roundtrip)
 
             if trip_gdf is not None and not trip_gdf.empty:
                 with (st.expander("View Calculated Trip", expanded=True)):

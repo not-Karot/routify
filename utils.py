@@ -69,7 +69,7 @@ def compute_polygon_buffer(gdf: gpd.GeoDataFrame, buffer_distance: float = 0.01)
     return buffered_convex_hull
 
 
-def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile) -> Optional[gpd.GeoDataFrame]:
+def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: bool) -> Optional[gpd.GeoDataFrame]:
     """
     Calculate a trip based on the input GeoDataFrame and network type.
 
@@ -115,7 +115,7 @@ def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile) -> Optional
     encoded_polyline = polyline.encode(point_list)
 
     # Get the trip routes using the OSRM API
-    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile)
+    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile, roundtrip=str(roundtrip).lower())
 
     if isinstance(routes, requests.Response):
         st.error(f"OSRM API error: {routes.status_code} - {routes.text}")
