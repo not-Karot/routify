@@ -8,7 +8,7 @@ from streamlit_folium import folium_static
 
 st.set_page_config(layout="wide")
 
-st.title('Magic Trip Solver')
+st.title('Routify')
 st.info("This app lets you upload a series of Points and provides you with an optimal-like trip "
         "to visit all of them at least once.")
 
@@ -167,6 +167,6 @@ st.sidebar.write("""
 
 st.sidebar.header("About:")
 st.sidebar.write("""
-This app uses the OSRM (Open Source Routing Machine) to calculate optimal routes between multiple points. 
+This app uses the OSM (Open Street Map) to calculate optimal routes between multiple points. 
 It's perfect for planning trips, deliveries, or any scenario where you need to visit multiple locations efficiently.
 """)
