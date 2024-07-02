@@ -1,4 +1,4 @@
-# 🚕: Magic Trip Solver
+# 🚕Routify
 
 A Streamlit app performing trip calculation given a long set of points.
 
