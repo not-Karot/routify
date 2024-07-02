@@ -22,6 +22,12 @@ with col2:
     transport_mode = st.radio("Select transportation mode:",
                               [profile.display_name for profile in TransportProfile])
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
+    streets = st.multiselect("Filter on street types", [
+    'motorway', 'trunk', 'primary', 'secondary', 'tertiary',
+    'unclassified', 'residential', 'living_street', 'road',
+    'motorway_link', 'trunk_link', 'primary_link', 'secondary_link',
+    'tertiary_link', 'rest_area', 'crossing'
+])
 
 if points_file is not None:
     points = gpd.read_file(points_file)
