@@ -1,5 +1,7 @@
 import streamlit as st
 import geopandas as gpd
+
+from osm_utils import highway_priority
 from utils import calculate_trip, display_map, TransportProfile, interpolate_color
 import folium
 from folium import FeatureGroup, LayerControl, plugins
@@ -18,16 +20,12 @@ with col1:
     points_file = st.file_uploader("Choose a GeoJSON file with points", type="geojson")
 
 with col2:
+    osmr_url = st.text_input("Computation server url", 'http://router.project-osrm.org')
     st.write("Transportation Options:")
     transport_mode = st.radio("Select transportation mode:",
                               [profile.display_name for profile in TransportProfile])
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
-    streets = st.multiselect("Filter on street types", [
-    'motorway', 'trunk', 'primary', 'secondary', 'tertiary',
-    'unclassified', 'residential', 'living_street', 'road',
-    'motorway_link', 'trunk_link', 'primary_link', 'secondary_link',
-    'tertiary_link', 'rest_area', 'crossing'
-])
+    streets = st.multiselect("Filter on street types", highway_priority, highway_priority)
 
 if points_file is not None:
     points = gpd.read_file(points_file)
@@ -53,7 +51,7 @@ if points_file is not None:
         if st.button("Start Trip Calculation"):
             with st.spinner("Calculating optimal trip..."):
                 profile = TransportProfile.get_by_display_name(transport_mode)
-                trip_gdf = calculate_trip(filtered_points, profile=profile, roundtrip=roundtrip)
+                trip_gdf = calculate_trip(filtered_points, profile=profile, roundtrip=roundtrip, base_url=osmr_url,streets=streets)
 
             if trip_gdf is not None and not trip_gdf.empty:
                 with (st.expander("View Calculated Trip", expanded=True)):

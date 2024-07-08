@@ -17,7 +17,7 @@ from enum import Enum
 
 
 class TransportProfile(Enum):
-    CAR = ("Car", "driving", "drive", 40)  # Nome, OSRM profile, OSM network type, average speed (km/h)
+    CAR = ("Car", "driving", "drive", 20)  # Nome, OSRM profile, OSM network type, average speed (km/h)
     BIKE = ("Bike", "cycling", "bike", 15)
 
     def __init__(self, display_name, osrm_profile, osm_network, avg_speed):
@@ -69,7 +69,7 @@ def compute_polygon_buffer(gdf: gpd.GeoDataFrame, buffer_distance: float = 0.01)
     return buffered_convex_hull
 
 
-def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: bool) -> Optional[gpd.GeoDataFrame]:
+def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: bool, base_url: str, streets : list = None) -> Optional[gpd.GeoDataFrame]:
     """
     Calculate a trip based on the input GeoDataFrame and network type.
 
@@ -107,6 +107,11 @@ def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: 
 
     # Merge the points GeoDataFrame with the streets edges GeoDataFrame
     gdf_streets = merge_points_gdf_with_streets_edges(points_gdf=gdf, streets_gdf=gdf_edges)
+    print(gdf_streets)
+    print(len(gdf_streets))
+    if streets:
+        gdf_streets = gdf_streets[gdf_streets['highway'].isin(streets)]
+        print(len(gdf_streets))
 
     # Convert the merged GeoDataFrame to a list of single points
     point_list = convert_gdf_to_single_point_list(gdf_streets, points_between=-1)
@@ -115,7 +120,7 @@ def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: 
     encoded_polyline = polyline.encode(point_list)
 
     # Get the trip routes using the OSRM API
-    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile, roundtrip=str(roundtrip).lower())
+    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile, roundtrip=str(roundtrip).lower(), base_url=base_url)
 
     if isinstance(routes, requests.Response):
         st.error(f"OSRM API error: {routes.status_code} - {routes.text}")
