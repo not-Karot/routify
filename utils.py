@@ -19,6 +19,7 @@ from enum import Enum
 class TransportProfile(Enum):
     CAR = ("Car", "driving", "drive", 20)  # Nome, OSRM profile, OSM network type, average speed (km/h)
     BIKE = ("Bike", "cycling", "bike", 15)
+    FOOT = ("Foot", "walking", "walk", 5)
 
     def __init__(self, display_name, osrm_profile, osm_network, avg_speed):
         self.display_name = display_name
@@ -69,24 +70,23 @@ def compute_polygon_buffer(gdf: gpd.GeoDataFrame, buffer_distance: float = 0.01)
     return buffered_convex_hull
 
 
-def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: bool, base_url: str, streets : list = None) -> Optional[gpd.GeoDataFrame]:
+def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: bool, base_url: str,
+                   streets: list = None, optimize_points: bool = False) -> Optional[gpd.GeoDataFrame]:
     """
-    Calculate a trip based on the input GeoDataFrame and network type.
-
-    This function processes the input GeoDataFrame to create a buffered polygon,
-    retrieves network nodes and edges within that polygon, filters the edges,
-    merges the points with the streets, and calculates a trip using the OSRM API.
-
     Args:
-        gdf (gpd.GeoDataFrame): The input GeoDataFrame containing points to calculate the trip for.
-        profile (TransportProfile, optional): The type of profile to use for the trip calculation. Defaults to "drive".
+        gdf: A GeoDataFrame containing points.
+        profile: A TransportProfile object specifying the profile for routing.
+        roundtrip: A boolean indicating whether the trip should be a roundtrip or not.
+        base_url: A string containing the base URL for the OSRM API.
+        streets: A list of strings specifying the street types to consider.
+        optimize_points: A boolean indicating whether to optimize the number of the points.
 
     Returns:
-        Optional[gpd.GeoDataFrame]: A GeoDataFrame containing the calculated route segments if successful,
-                                    or None if no valid route is found.
+        A GeoDataFrame containing the routes of the calculated trip, or None if no routes are found.
 
     Raises:
-        ValueError: If the input GeoDataFrame is empty or invalid.
+        ValueError: If the input GeoDataFrame is empty.
+        AssertionError: If the input GeoDataFrame does not have a valid CRS.
     """
     if gdf.empty:
         raise ValueError("The input GeoDataFrame is empty")
@@ -107,11 +107,9 @@ def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: 
 
     # Merge the points GeoDataFrame with the streets edges GeoDataFrame
     gdf_streets = merge_points_gdf_with_streets_edges(points_gdf=gdf, streets_gdf=gdf_edges)
-    print(gdf_streets)
-    print(len(gdf_streets))
+
     if streets:
         gdf_streets = gdf_streets[gdf_streets['highway'].isin(streets)]
-        print(len(gdf_streets))
 
     # Convert the merged GeoDataFrame to a list of single points
     point_list = convert_gdf_to_single_point_list(gdf_streets, points_between=-1)
@@ -120,7 +118,8 @@ def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: 
     encoded_polyline = polyline.encode(point_list)
 
     # Get the trip routes using the OSRM API
-    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile, roundtrip=str(roundtrip).lower(), base_url=base_url)
+    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile, roundtrip=str(roundtrip).lower(),
+                           base_url=base_url)
 
     if isinstance(routes, requests.Response):
         st.error(f"OSRM API error: {routes.status_code} - {routes.text}")
@@ -175,8 +174,7 @@ def display_map(gdf):
 
 def interpolate_color(value, start_color, end_color):
     """Interpolate color from start_color to end_color based on value in [0, 1]."""
-    start_color = [int(start_color[i:i+2], 16) for i in (1, 3, 5)]
-    end_color = [int(end_color[i:i+2], 16) for i in (1, 3, 5)]
+    start_color = [int(start_color[i:i + 2], 16) for i in (1, 3, 5)]
+    end_color = [int(end_color[i:i + 2], 16) for i in (1, 3, 5)]
     color = [int(start + (end - start) * value) for start, end in zip(start_color, end_color)]
     return f'#{color[0]:02x}{color[1]:02x}{color[2]:02x}'
-

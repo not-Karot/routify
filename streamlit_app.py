@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import streamlit as st
 import geopandas as gpd
 
@@ -24,6 +26,9 @@ with col2:
     st.write("Transportation Options:")
     transport_mode = st.radio("Select transportation mode:",
                               [profile.display_name for profile in TransportProfile])
+    optimize_points = st.toggle("Optimize points", value=False, help="Whether to provide all points to trip calculator "
+                                                                    "or reduce them in number, this may cause some "
+                                                                    "unpredictable behavior ")
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
     streets = st.multiselect("Filter on street types", highway_priority, highway_priority)
 
@@ -51,7 +56,8 @@ if points_file is not None:
         if st.button("Start Trip Calculation"):
             with st.spinner("Calculating optimal trip..."):
                 profile = TransportProfile.get_by_display_name(transport_mode)
-                trip_gdf = calculate_trip(filtered_points, profile=profile, roundtrip=roundtrip, base_url=osmr_url,streets=streets)
+                trip_gdf = calculate_trip(filtered_points, profile=profile, roundtrip=roundtrip, base_url=osmr_url,
+                                          streets=streets, optimize_points=optimize_points)
 
             if trip_gdf is not None and not trip_gdf.empty:
                 with (st.expander("View Calculated Trip", expanded=True)):
@@ -119,7 +125,6 @@ if points_file is not None:
                     m.add_child(points_group)
                     m.add_child(markers_group)
 
-                    LayerControl().add_to(m)
                     m.fit_bounds(m.get_bounds())
                     # color legend
                     st.markdown("""
