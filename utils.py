@@ -3,6 +3,7 @@ from typing import Optional
 import folium
 import requests
 import streamlit as st
+from shapely import Point
 from streamlit_folium import folium_static
 from folium.plugins import MarkerCluster
 import geopandas as gpd
@@ -78,7 +79,9 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
                    profile: TransportProfile,
                    roundtrip: bool, base_url: str,
                    streets: list = None,
-                   optimize_points: bool = False) -> Optional[gpd.GeoDataFrame]:
+                   optimize_points: bool = False,
+                   start_point: Point = None,
+                   end_point: Point = None) -> Optional[gpd.GeoDataFrame]:
     """
     Args:
         gdf: A GeoDataFrame containing points.
@@ -87,6 +90,8 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
         base_url: A string containing the base URL for the OSRM API.
         streets: A list of strings specifying the street types to consider.
         optimize_points: A boolean indicating whether to optimize the number of the points.
+        start_point: The starting point for the trip (optional).
+        end_point: The destination point for the trip (optional).
 
     Returns:
         A GeoDataFrame containing the routes of the calculated trip, or None if no routes are found.
@@ -103,7 +108,7 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
     # Remove index columns if present
     gdf = gdf.drop(columns=['index_left', 'index_right'], errors='ignore')
 
-    #if optimize then join all the points with the osm streets and take a variable
+    # if optimize then join all the points with the osm streets and take a variable
     # number of points from the linestring
     if optimize_points:
         # Compute the buffered polygon from the input GeoDataFrame
@@ -125,6 +130,11 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
         point_list = convert_gdf_to_single_point_list(gdf_streets, points_between=-1)
     else:
         point_list = [(point.y, point.x) for point in gdf.geometry]
+
+    if start_point:
+        point_list.insert(0, (start_point.y, start_point.x))
+    if end_point:
+        point_list.append((end_point.y, end_point.x))
 
     # Encode the points list to a polyline
     encoded_polyline = polyline.encode(point_list)
