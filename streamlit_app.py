@@ -1,12 +1,10 @@
-from datetime import datetime
-
 import streamlit as st
 import geopandas as gpd
 
 from osm_utils import highway_priority
 from utils import calculate_trip, display_map, TransportProfile, interpolate_color
 import folium
-from folium import FeatureGroup, LayerControl, plugins
+from folium import FeatureGroup, plugins
 
 from streamlit_folium import folium_static
 
@@ -22,18 +20,64 @@ with col1:
     points_file = st.file_uploader("Choose a GeoJSON file with points", type="geojson")
 
 with col2:
-    osmr_url = st.text_input("Computation server url", 'http://router.project-osrm.org')
+    osrm_servers = [
+        'https://router.project-osrm.org',
+        'https://routing.openstreetmap.de/routed-foot/',
+        'https://routing.openstreetmap.de/routed-bike/',
+        'https://routing.openstreetmap.de/routed-car/',
+        'Custom'
+    ]
+
+    default_profile_options = TransportProfile.get_all_osrm_profiles()
+
+    # Create a selectbox for choosing the OSRM server
+    selected_server = st.selectbox("Select OSRM server:", osrm_servers)
+
+    use_profile_placeholder = False
+    profile_mapping = {}
+
+    # If 'Custom' is selected, show a text input for custom URL
+    if selected_server == 'Custom':
+        osmr_url = st.text_input("Enter custom OSRM server URL:", "https://example-{}.com")
+        use_profile_placeholder = st.checkbox("Use profile placeholder in URL", value=True)
+
+        if use_profile_placeholder:
+            if osmr_url.count('{}') != 1 and osmr_url.count('{profile}') != 1:
+                st.error("The URL must contain exactly one placeholder marked with {} or {profile}.")
+            else:
+                # If the placeholder is {profile}, replace it with {}
+                osmr_url = osmr_url.replace('{profile}', '{}')
+
+                st.write("Map transport modes to OSRM profiles:")
+                for profile in TransportProfile:
+                    mapped_value = st.text_input(f"Map {profile.display_name} to:",
+                                                 value=profile.osrm_profile,
+                                                 key=f"profile_map_{profile.name}")
+                    profile_mapping[profile] = mapped_value
+    else:
+        osmr_url = selected_server
+
     st.write("Transportation Options:")
-    transport_mode = st.radio("Select transportation mode:",
+    transport_mode_display = st.radio("Select transportation mode:",
                               [profile.display_name for profile in TransportProfile])
+
+    profile = TransportProfile.get_by_display_name(transport_mode_display)
+
+    if use_profile_placeholder and selected_server == 'Custom':
+        placeholder_value = profile_mapping.get(profile, profile.osrm_profile)
+        osmr_url = osmr_url.format(placeholder_value)
+        st.write(f"Final URL: {osmr_url}")
+    else:
+        st.write(f"Final URL: {osmr_url}")
+
     optimize_points = st.toggle("Optimize points", value=False, help="Whether to provide all points to trip calculator "
-                                                                    "or reduce them in number, this may cause some "
-                                                                    "unpredictable behavior ")
+                                                                     "or reduce them in number, this may cause some "
+                                                                     "unpredictable behavior ")
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
     streets = st.multiselect("Filter on street types", highway_priority, highway_priority)
 
 if points_file is not None:
-    points = gpd.read_file(points_file)
+    points = gpd.read_file(points_file).reset_index(drop=True)
 
     if points.crs != 'EPSG:4326':
         points = points.to_crs('EPSG:4326')
@@ -55,9 +99,12 @@ if points_file is not None:
 
         if st.button("Start Trip Calculation"):
             with st.spinner("Calculating optimal trip..."):
-                profile = TransportProfile.get_by_display_name(transport_mode)
-                trip_gdf = calculate_trip(filtered_points, profile=profile, roundtrip=roundtrip, base_url=osmr_url,
-                                          streets=streets, optimize_points=optimize_points)
+                trip_gdf = calculate_trip(filtered_points,
+                                          profile=profile,
+                                          roundtrip=roundtrip,
+                                          base_url=osmr_url,
+                                          streets=streets,
+                                          optimize_points=optimize_points)
 
             if trip_gdf is not None and not trip_gdf.empty:
                 with (st.expander("View Calculated Trip", expanded=True)):
@@ -71,7 +118,6 @@ if points_file is not None:
                     lines_group = FeatureGroup(name="Route")
                     points_group = FeatureGroup(name='Points')
                     markers_group = FeatureGroup(name='Markers')
-
 
                     for idx, row in filtered_points.iterrows():
                         folium.CircleMarker(
@@ -95,7 +141,7 @@ if points_file is not None:
                     ).add_to(markers_group)
 
                     for idx, row in trip_gdf.iterrows():
-                        color = interpolate_color(idx / (len(trip_gdf) - 1), '#00ff00','#ff0000' )
+                        color = interpolate_color(idx / (len(trip_gdf) - 1), '#00ff00','#ff0000')
                         pol = folium.PolyLine(
                             locations=[(y, x) for x, y in row.geometry.coords],
                             color=color,
@@ -107,7 +153,7 @@ if points_file is not None:
 
                         plugins.PolyLineTextPath(
                             polyline=pol,
-                            text=f'→',
+                            text='→',
                             repeat=True,
                             offset=1,
                             attributes={'fill': '#000000', 'font-weight': 'bold', 'font-size': '34'}
@@ -148,7 +194,6 @@ if points_file is not None:
                     estimated_time = total_distance / profile.avg_speed
                     st.write(f"Estimated travel time: {estimated_time:.2f} hours")
 
-
                     trip_geojson = trip_gdf.to_json()
 
                     # download
@@ -160,7 +205,6 @@ if points_file is not None:
                     )
             else:
                 st.error("Failed to calculate the trip. Please try again.")
-
 
 # Add some instructions and information
 st.sidebar.header("How to use:")
