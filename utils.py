@@ -34,6 +34,10 @@ class TransportProfile(Enum):
                 return profile
         raise ValueError(f"No TransportProfile found for name: {name}")
 
+    @classmethod
+    def get_all_osrm_profiles(cls):
+        return [profile.osrm_profile for profile in cls]
+
 
 def compute_polygon_buffer(gdf: gpd.GeoDataFrame, buffer_distance: float = 0.01) -> Polygon:
     """
@@ -70,8 +74,11 @@ def compute_polygon_buffer(gdf: gpd.GeoDataFrame, buffer_distance: float = 0.01)
     return buffered_convex_hull
 
 
-def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: bool, base_url: str,
-                   streets: list = None, optimize_points: bool = False) -> Optional[gpd.GeoDataFrame]:
+def calculate_trip(gdf: gpd.GeoDataFrame,
+                   profile: TransportProfile,
+                   roundtrip: bool, base_url: str,
+                   streets: list = None,
+                   optimize_points: bool = False) -> Optional[gpd.GeoDataFrame]:
     """
     Args:
         gdf: A GeoDataFrame containing points.
@@ -96,29 +103,36 @@ def calculate_trip(gdf: gpd.GeoDataFrame, profile: TransportProfile, roundtrip: 
     # Remove index columns if present
     gdf = gdf.drop(columns=['index_left', 'index_right'], errors='ignore')
 
-    # Compute the buffered polygon from the input GeoDataFrame
-    polygon = compute_polygon_buffer(gdf)
+    #if optimize then join all the points with the osm streets and take a variable
+    # number of points from the linestring
+    if optimize_points:
+        # Compute the buffered polygon from the input GeoDataFrame
+        polygon = compute_polygon_buffer(gdf)
 
-    # Get network nodes and edges within the polygon
-    _, gdf_edges = get_gdfs_from_polygon(polygon, profile.osm_network)
+        # Get network nodes and edges within the polygon
+        _, gdf_edges = get_gdfs_from_polygon(polygon, profile.osm_network)
 
-    # Filter the edges data
-    gdf_edges = gdf_edges.pipe(filter_data)
+        # Filter the edges data
+        gdf_edges = gdf_edges.pipe(filter_data)
 
-    # Merge the points GeoDataFrame with the streets edges GeoDataFrame
-    gdf_streets = merge_points_gdf_with_streets_edges(points_gdf=gdf, streets_gdf=gdf_edges)
+        # Merge the points GeoDataFrame with the streets edges GeoDataFrame
+        gdf_streets = merge_points_gdf_with_streets_edges(points_gdf=gdf, streets_gdf=gdf_edges)
 
-    if streets:
-        gdf_streets = gdf_streets[gdf_streets['highway'].isin(streets)]
+        if streets:
+            gdf_streets = gdf_streets[gdf_streets['highway'].isin(streets)]
 
-    # Convert the merged GeoDataFrame to a list of single points
-    point_list = convert_gdf_to_single_point_list(gdf_streets, points_between=-1)
+        # Convert the merged GeoDataFrame to a list of single points
+        point_list = convert_gdf_to_single_point_list(gdf_streets, points_between=-1)
+    else:
+        point_list = [(point.y, point.x) for point in gdf.geometry]
 
     # Encode the points list to a polyline
     encoded_polyline = polyline.encode(point_list)
 
     # Get the trip routes using the OSRM API
-    routes = get_osrm_trip(encoded_polyline, profile=profile.osrm_profile, roundtrip=str(roundtrip).lower(),
+    routes = get_osrm_trip(encoded_polyline,
+                           profile=profile.osrm_profile,
+                           roundtrip=str(roundtrip).lower(),
                            base_url=base_url)
 
     if isinstance(routes, requests.Response):
