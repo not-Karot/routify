@@ -29,7 +29,8 @@ def get_gdfs_from_polygon(polygon: Polygon, network_type: str = 'drive') -> Tupl
 
     gdf_nodes, gdf_edges = ox.graph_to_gdfs(
         G,
-        nodes=True, edges=True,
+        nodes=True,
+        edges=True,
         node_geometry=True,
         fill_edge_geometry=True
     )

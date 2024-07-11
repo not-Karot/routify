@@ -1,6 +1,7 @@
 from typing import Union, List, Optional
 
 import requests
+from requests.exceptions import MissingSchema, InvalidURL, Timeout
 
 from shapely.geometry import LineString
 import polyline
@@ -14,7 +15,7 @@ def get_osrm_trip(
         overview: str = 'full',
         annotations: str = 'true',
         roundtrip: str = 'false',
-        base_url: str = 'http://router.project-osrm.org'
+        base_url: str = 'http://router.project-osrm.org',
 ) -> Optional[Union[List[LineString], requests.Response]]:
     """
     Fetch and process an OSRM trip based on the given parameters.
@@ -31,7 +32,7 @@ def get_osrm_trip(
         overview (str, optional): The type of overview geometry to include. Defaults to 'full'.
         annotations (str, optional): Whether to include annotations. Defaults to 'true'.
         roundtrip (str, optional): Whether the trip should return to the start point. Defaults to 'false'.
-        base_url (str, optional): The base URL of the OSRM server. Defaults to 'http://localhost:5000'.
+        base_url (str, optional): The base URL of the OSRM server. Defaults to 'http://router.project-osrm.org'.
 
     Returns:
         Optional[Union[List[LineString], requests.Response]]:
@@ -40,29 +41,45 @@ def get_osrm_trip(
             - Returns None if no valid route is found or in case of other errors.
 
     Raises:
-        Any exceptions raised by the requests library are not caught and will propagate.
+        ValueError: If the URL is invalid or the request fails.
+        TimeoutError: If the request times out.
+
+    Note:
+        This function relies on external services and may fail due to network issues or service unavailability.
     """
 
     osrm_url = (
         f"{base_url}/trip/v1/{profile}/polyline({encoded_polyline})?"
         f"roundtrip={roundtrip}&source=first&destination=last&"
-        f"steps={steps}&geometries={geometries}&overview={overview}&annotations={annotations}"
+        f"steps={steps}&"
+        f"geometries={geometries}&"
+        f"overview={overview}&"
+        f"annotations={annotations}"
     )
 
-    response = requests.get(osrm_url)
-    if response.status_code == 200:
-        data = response.json()
-        trips = data.get('trips', [])
-        routes = []
-        for trip in trips:
-            for leg in trip.get('legs', []):
-                for step in leg.get('steps', []):
-                    encoded_polyline = step.get('geometry', '')
-                    if encoded_polyline:
-                        decoded_route = polyline.decode(encoded_polyline)
-                        if len(decoded_route) > 1:
-                            routes.append(LineString([(lon, lat) for lat, lon in decoded_route]))
+    try:
+        response = requests.get(osrm_url)
+        if response.status_code == 200:
+            data = response.json()
+            trips = data.get('trips', [])
+            routes = []
+            for trip in trips:
+                for leg in trip.get('legs', []):
+                    for step in leg.get('steps', []):
+                        encoded_polyline = step.get('geometry', '')
+                        if encoded_polyline:
+                            decoded_route = polyline.decode(encoded_polyline)
+                            if len(decoded_route) > 1:
+                                routes.append(LineString([(lon, lat) for lat, lon in decoded_route]))
 
-        return routes if routes else None
-    else:
-        return response
+            return routes if routes else None
+        else:
+            return response
+    except (MissingSchema, InvalidURL):
+        raise ValueError(f"Invalid URL: {base_url}")
+    except Timeout as timeout_error:
+        raise TimeoutError(f"Request timed out: {str(timeout_error)}") from timeout_error
+    except requests.HTTPError as http_error:
+        return http_error.response
+    except requests.RequestException as req_error:
+        raise ValueError(f"Request failed: {str(req_error)}") from req_error
