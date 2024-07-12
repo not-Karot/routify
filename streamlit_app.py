@@ -52,7 +52,9 @@ with col2:
                 for profile in TransportProfile:
                     mapped_value = st.text_input(f"Map {profile.display_name} to:",
                                                  value=profile.osrm_profile,
-                                                 key=f"profile_map_{profile.name}")
+                                                 key=f"profile_map_{profile.name}",
+                                                 help="This field will update the url to ping the right server based "
+                                                      "on trasnsportation mode")
                     profile_mapping[profile] = mapped_value
     else:
         osmr_url = selected_server
