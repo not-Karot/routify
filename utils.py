@@ -159,8 +159,13 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
     routes_gdf.reset_index(inplace=True)
 
     return routes_gdf
+def update_point(point_type):
+    if f'{point_type}_point_coords' in st.session_state:
+        coords = st.session_state[f'{point_type}_point_coords']
+        st.session_state[f'{point_type}_point'] = Point(coords['lon'], coords['lat'])
 
-
+def handle_map_click(lat, lon):
+    return Point(lon, lat)
 def display_map(gdf):
     # Display the map
     st.subheader("Map Visualization")
