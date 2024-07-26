@@ -119,6 +119,15 @@ if 'verify_coverage' not in st.session_state:
     st.session_state.verify_coverage = True
 if 'max_distance' not in st.session_state:
     st.session_state.max_distance = 10
+if 'previous_transport_mode' not in st.session_state:
+    st.session_state.previous_transport_mode = None
+if 'previous_optimize_points' not in st.session_state:
+    st.session_state.previous_optimize_points = None
+if 'previous_roundtrip' not in st.session_state:
+    st.session_state.previous_roundtrip = None
+if 'previous_osmr_url' not in st.session_state:
+    st.session_state.previous_osmr_url = None
+
 
 # Callback for max_distance slider
 def update_uncovered_points():
@@ -128,6 +137,14 @@ def update_uncovered_points():
             st.session_state.filtered_points,
             st.session_state.max_distance
         )
+
+
+# Function to reset trip calculation
+def reset_trip_calculation():
+    st.session_state.trip_calculated = False
+    st.session_state.trip_gdf = None
+    st.session_state.uncovered_points = None
+
 
 st.title('Routify')
 st.info("This app lets you upload a series of Points and provides you with an optimal-like trip "
@@ -195,7 +212,8 @@ with col2:
                                                                      "or reduce them in number, this may cause some "
                                                                      "unpredictable behavior ")
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
-    verify_coverage = st.checkbox("Verify point coverage", value=st.session_state.verify_coverage, key='verify_coverage')
+    verify_coverage = st.checkbox("Verify point coverage", value=st.session_state.verify_coverage,
+                                  key='verify_coverage')
 
     if verify_coverage:
         max_distance = st.slider("Maximum distance for point coverage (meters)",
@@ -208,6 +226,19 @@ with col2:
         streets = st.multiselect("Filter on street types", highway_priority, highway_priority)
     else:
         streets = highway_priority
+
+    # Check if any of the key parameters have changed
+    if (transport_mode_display != st.session_state.previous_transport_mode or
+            optimize_points != st.session_state.previous_optimize_points or
+            roundtrip != st.session_state.previous_roundtrip or
+            osmr_url != st.session_state.previous_osmr_url):
+        reset_trip_calculation()
+
+    # Update the previous state
+    st.session_state.previous_transport_mode = transport_mode_display
+    st.session_state.previous_optimize_points = optimize_points
+    st.session_state.previous_roundtrip = roundtrip
+    st.session_state.previous_osmr_url = osmr_url
 
 if points_file is not None:
     points = gpd.read_file(points_file).reset_index(drop=True)
