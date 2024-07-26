@@ -3,7 +3,7 @@
 A Streamlit app performing trip calculation given a long set of points.
 
 
-## You can explore a demo of Routify [online](https://magic-trip-solver.streamlit.app/)
+## You can explore a demo of Routify [online](https://routify.streamlit.app/)
 
 
 ### How to run it on your own machine
