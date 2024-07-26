@@ -79,7 +79,10 @@ with col2:
                                                                      "or reduce them in number, this may cause some "
                                                                      "unpredictable behavior ")
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
-    streets = st.multiselect("Filter on street types", highway_priority, highway_priority)
+    if optimize_points:
+        streets = st.multiselect("Filter on street types", highway_priority, highway_priority)
+    else:
+        streets = highway_priority
 
 if points_file is not None:
     points = gpd.read_file(points_file).reset_index(drop=True)
