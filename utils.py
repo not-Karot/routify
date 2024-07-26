@@ -177,6 +177,14 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
         st.success(f"All points were covered by the calculated route (max distance: {max_distance} meters).")
         return routes_gdf, None
 
+def recalculate_uncovered_points(trip_gdf: gpd.GeoDataFrame,
+                                 points_gdf: gpd.GeoDataFrame,
+                                 max_distance: float) -> Optional[gpd.GeoDataFrame]:
+    covered_points = gpd.sjoin_nearest(points_gdf.to_crs("EPSG:3857"), trip_gdf.to_crs("EPSG:3857"), how="left",
+                                       max_distance=max_distance)
+    uncovered_points = covered_points[covered_points['index_right0'].isna()]
+    return uncovered_points.to_crs(epsg=4326) if not uncovered_points.empty else None
+
 def update_point(point_type):
     if f'{point_type}_point_coords' in st.session_state:
         coords = st.session_state[f'{point_type}_point_coords']

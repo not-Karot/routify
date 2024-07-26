@@ -6,7 +6,7 @@ from streamlit_folium import folium_static
 from shapely import Point
 
 from osm_utils import highway_priority
-from utils import calculate_trip, TransportProfile, interpolate_color
+from utils import calculate_trip, TransportProfile, interpolate_color, recalculate_uncovered_points
 
 
 def create_trip_map(trip_gdf, filtered_points, uncovered_points, verify_coverage):
@@ -113,6 +113,21 @@ if 'trip_gdf' not in st.session_state:
     st.session_state.trip_gdf = None
 if 'uncovered_points' not in st.session_state:
     st.session_state.uncovered_points = None
+if 'filtered_points' not in st.session_state:
+    st.session_state.filtered_points = None
+if 'verify_coverage' not in st.session_state:
+    st.session_state.verify_coverage = True
+if 'max_distance' not in st.session_state:
+    st.session_state.max_distance = 10
+
+# Callback for max_distance slider
+def update_uncovered_points():
+    if st.session_state.trip_calculated and st.session_state.verify_coverage:
+        st.session_state.uncovered_points = recalculate_uncovered_points(
+            st.session_state.trip_gdf,
+            st.session_state.filtered_points,
+            st.session_state.max_distance
+        )
 
 st.title('Routify')
 st.info("This app lets you upload a series of Points and provides you with an optimal-like trip "
@@ -180,11 +195,12 @@ with col2:
                                                                      "or reduce them in number, this may cause some "
                                                                      "unpredictable behavior ")
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
-    verify_coverage = st.checkbox("Verify point coverage", value=True)
+    verify_coverage = st.checkbox("Verify point coverage", value=st.session_state.verify_coverage, key='verify_coverage')
 
     if verify_coverage:
         max_distance = st.slider("Maximum distance for point coverage (meters)",
-                                 min_value=1, max_value=100, value=10, step=1)
+                                 min_value=1, max_value=100, value=st.session_state.max_distance, step=1,
+                                 key='max_distance', on_change=update_uncovered_points)
     else:
         max_distance = None
 
@@ -246,6 +262,7 @@ if points_file is not None:
         if st.button("Start Trip Calculation") or st.session_state.trip_calculated:
             if not st.session_state.trip_calculated:
                 with st.spinner("Calculating optimal trip..."):
+                    st.session_state.filtered_points = filtered_points
                     st.session_state.trip_gdf, st.session_state.uncovered_points = calculate_trip(
                         filtered_points,
                         profile=profile,
