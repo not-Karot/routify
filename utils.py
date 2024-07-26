@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import folium
 import requests
@@ -81,8 +81,11 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
                    streets: list = None,
                    optimize_points: bool = False,
                    start_point: Point = None,
-                   end_point: Point = None) -> Optional[gpd.GeoDataFrame]:
+                   end_point: Point = None,
+                   max_distance: float = 10.0) -> Tuple[Optional[gpd.GeoDataFrame], Optional[gpd.GeoDataFrame]]:
     """
+    Calculate a trip route and identify uncovered points.
+
     Args:
         gdf: A GeoDataFrame containing points.
         profile: A TransportProfile object specifying the profile for routing.
@@ -92,9 +95,12 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
         optimize_points: A boolean indicating whether to optimize the number of the points.
         start_point: The starting point for the trip (optional).
         end_point: The destination point for the trip (optional).
+        max_distance: The maximum distance (in meters) for a point to be considered covered by the route.
 
     Returns:
-        A GeoDataFrame containing the routes of the calculated trip, or None if no routes are found.
+        A tuple containing:
+        - A GeoDataFrame containing the routes of the calculated trip, or None if no routes are found.
+        - A GeoDataFrame containing the uncovered points, or None if all points are covered.
 
     Raises:
         ValueError: If the input GeoDataFrame is empty.
@@ -156,9 +162,29 @@ def calculate_trip(gdf: gpd.GeoDataFrame,
 
     # Create a GeoDataFrame from the routes
     routes_gdf = gpd.GeoDataFrame(geometry=routes, crs="EPSG:4326")
-    routes_gdf.reset_index(inplace=True)
 
-    return routes_gdf
+    gdf = gdf.drop(columns=['index_right'], errors='ignore')
+    # Use sjoin_nearest to find uncovered points
+    covered_points = gpd.sjoin_nearest(gdf.to_crs("EPSG:3857"), routes_gdf.to_crs("EPSG:3857"), how="left", max_distance=max_distance)
+
+    routes_gdf.reset_index(inplace=True)
+    uncovered_points = covered_points[covered_points['index_right'].isna()]
+    if not uncovered_points.empty:
+        st.warning(
+            f"{len(uncovered_points)} points were not covered by the calculated route (max distance: {max_distance} meters).")
+        return routes_gdf, uncovered_points.to_crs(epsg=4326)
+    else:
+        st.success(f"All points were covered by the calculated route (max distance: {max_distance} meters).")
+        return routes_gdf, None
+
+def recalculate_uncovered_points(trip_gdf: gpd.GeoDataFrame,
+                                 points_gdf: gpd.GeoDataFrame,
+                                 max_distance: float) -> Optional[gpd.GeoDataFrame]:
+    covered_points = gpd.sjoin_nearest(points_gdf.to_crs("EPSG:3857"), trip_gdf.to_crs("EPSG:3857"), how="left",
+                                       max_distance=max_distance)
+    uncovered_points = covered_points[covered_points['index_right0'].isna()]
+    return uncovered_points.to_crs(epsg=4326) if not uncovered_points.empty else None
+
 def update_point(point_type):
     if f'{point_type}_point_coords' in st.session_state:
         coords = st.session_state[f'{point_type}_point_coords']
