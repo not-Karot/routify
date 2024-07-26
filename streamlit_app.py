@@ -64,7 +64,7 @@ with col2:
 
     st.write("Transportation Options:")
     transport_mode_display = st.radio("Select transportation mode:",
-                              [profile.display_name for profile in TransportProfile])
+                                      [profile.display_name for profile in TransportProfile])
 
     profile = TransportProfile.get_by_display_name(transport_mode_display)
 
@@ -79,6 +79,14 @@ with col2:
                                                                      "or reduce them in number, this may cause some "
                                                                      "unpredictable behavior ")
     roundtrip = st.checkbox("Make it a roundtrip", value=False)
+    verify_coverage = st.checkbox("Verify point coverage", value=True)
+
+    if verify_coverage:
+        max_distance = st.slider("Maximum distance for point coverage (meters)",
+                                 min_value=1, max_value=100, value=10, step=1)
+    else:
+        max_distance = None
+
     if optimize_points:
         streets = st.multiselect("Filter on street types", highway_priority, highway_priority)
     else:
@@ -136,17 +144,18 @@ if points_file is not None:
 
         if st.button("Start Trip Calculation"):
             with st.spinner("Calculating optimal trip..."):
-                trip_gdf = calculate_trip(filtered_points,
-                                          profile=profile,
-                                          roundtrip=roundtrip,
-                                          base_url=osmr_url,
-                                          streets=streets,
-                                          optimize_points=optimize_points,
-                                          start_point=start_point,
-                                          end_point=end_point)
+                trip_gdf, uncovered_points = calculate_trip(filtered_points,
+                                                            profile=profile,
+                                                            roundtrip=roundtrip,
+                                                            base_url=osmr_url,
+                                                            streets=streets,
+                                                            optimize_points=optimize_points,
+                                                            start_point=start_point,
+                                                            end_point=end_point,
+                                                            max_distance=max_distance if verify_coverage else None)
 
                 if trip_gdf is not None and not trip_gdf.empty:
-                    with (st.expander("View Calculated Trip", expanded=True)):
+                    with st.expander("View Calculated Trip", expanded=True):
                         st.subheader("Map of Calculated Trip")
 
                         bounds = trip_gdf.total_bounds
@@ -167,6 +176,7 @@ if points_file is not None:
                                 fill=True,
                                 fillColor="blue"
                             ).add_to(points_group)
+
                         folium.Marker(
                             [trip_gdf.iloc[0].geometry.coords[0][1], trip_gdf.iloc[0].geometry.coords[0][0]],
                             popup="Start",
@@ -180,7 +190,7 @@ if points_file is not None:
                         ).add_to(markers_group)
 
                         for idx, row in trip_gdf.iterrows():
-                            color = interpolate_color(idx / (len(trip_gdf) - 1), '#00ff00','#ff0000')
+                            color = interpolate_color(idx / (len(trip_gdf) - 1), '#00ff00', '#ff0000')
                             pol = folium.PolyLine(
                                 locations=[(y, x) for x, y in row.geometry.coords],
                                 color=color,
@@ -210,6 +220,19 @@ if points_file is not None:
                         m.add_child(points_group)
                         m.add_child(markers_group)
 
+                        if verify_coverage and uncovered_points is not None and not uncovered_points.empty:
+                            uncovered_group = FeatureGroup(name='Uncovered Points')
+                            for idx, row in uncovered_points.iterrows():
+                                folium.CircleMarker(
+                                    [row.geometry.y, row.geometry.x],
+                                    radius=5,
+                                    popup=f"Uncovered Point {idx}",
+                                    color="red",
+                                    fill=True,
+                                    fillColor="red"
+                                ).add_to(uncovered_group)
+                            m.add_child(uncovered_group)
+
                         m.fit_bounds(m.get_bounds())
                         # color legend
                         st.markdown("""
@@ -220,28 +243,49 @@ if points_file is not None:
                             width: 200px;
                         }
                         </style>
-                        <div>Legenda:</div>
+                        <div>Legend:</div>
                         <div class="legend"></div>
                         <div>Start ← → End</div>
                         """, unsafe_allow_html=True)
                         folium_static(m)
 
                         # statistics
-                        total_distance = sum(line.length for line in trip_gdf.geometry) * 111  # Approximate km conversion
+                        total_distance = sum(
+                            line.length for line in trip_gdf.geometry) * 111  # Approximate km conversion
                         st.write(f"Total trip distance: {total_distance:.2f} km")
 
                         estimated_time = total_distance / profile.avg_speed
                         st.write(f"Estimated travel time: {estimated_time:.2f} hours")
 
-                        trip_geojson = trip_gdf.to_json()
+                        if verify_coverage:
+                            if uncovered_points is not None and not uncovered_points.empty:
+                                st.warning(
+                                    f"{len(uncovered_points)} points were not covered by the calculated route (max distance: {max_distance} meters).")
+                            else:
+                                st.success(
+                                    f"All points were covered by the calculated route (max distance: {max_distance} meters).")
 
-                        # download
-                        st.download_button(
-                            label="Download trip as GeoJSON",
-                            data=trip_geojson,
-                            file_name="trip.geojson",
-                            mime="application/json"
-                        )
+                            # Download buttons
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            trip_geojson = trip_gdf.to_json()
+                            st.download_button(
+                                label="Download trip as GeoJSON",
+                                data=trip_geojson,
+                                file_name="trip.geojson",
+                                mime="application/json"
+                            )
+
+                        with col2:
+                            if uncovered_points is not None and not uncovered_points.empty:
+                                uncovered_geojson = uncovered_points.to_json()
+                                st.download_button(
+                                    label="Download uncovered points as GeoJSON",
+                                    data=uncovered_geojson,
+                                    file_name="uncovered_points.geojson",
+                                    mime="application/json"
+                                )
                 else:
                     st.error("Failed to calculate the trip. Please try again.")
 
